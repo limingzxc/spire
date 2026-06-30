@@ -8,10 +8,10 @@
     "limingzxc"
   ],
   "contact": {
-    "homepage": "https://github.com/MinecraftIsTooEasy/fish-example-mod",
-    "sources": "https://github.com/MinecraftIsTooEasy/fish-example-mod"
+    "homepage": "https://github.com/limingzxc/spire",
+    "sources": "https://github.com/limingzxc/spire"
   },
-  "license": "CC0-1.0",
+  "license": "GPL-3.0",
   "icon": "assets/modid/icon.png",
   "environment": "*",
   "entrypoints": {
