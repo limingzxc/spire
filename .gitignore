@@ -1,0 +1,53 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+
+# Decompiled source / dev workspace files from other mods (RustedIronCore, Glacier, MITE)
+# These are not part of the Spire mod and must not be redistributed in a public repo.
+
+moddedmite/
+huix/
+net/
+META-INF/
+assets/
+/rustedironcore.mixins.json
+/glacier.mixins.json
+/rustedironcore.accesswidener
+/fml.mod.json
