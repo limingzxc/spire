@@ -39,4 +39,13 @@ public class SpireDimensionProvider extends WorldProvider {
     public ChunkCoordinates getEntrancePortalLocation() {
         return new ChunkCoordinates(SPAWN_X, SPAWN_Y, SPAWN_Z);
     }
+
+    /** 父类 calcSunriseSunsetColors 在上午会调 worldObj.isStormingTodayAt / isPrecipitatingTodayAt
+     *  计算天气预告颜色；而 World.getWeatherEventsForToday 对非主世界维度（canPrecipitate()==false）
+     *  直接返回 null，isStormingAt 没 null 检查导致 NPE 崩溃（堆栈 World.isStormingAt:5629）。
+     *  尖塔维度无日夜循环、无天气，参照 WorldProviderEnd 直接返回 null 跳过整段计算。 */
+    @Override
+    public float[] calcSunriseSunsetColors(float par1, float par2) {
+        return null;
+    }
 }

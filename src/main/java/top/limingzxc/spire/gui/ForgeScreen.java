@@ -1,7 +1,6 @@
 package top.limingzxc.spire.gui;
 
 import top.limingzxc.spire.network.SpireNetwork;
-import top.limingzxc.spire.relic.RelicEffect;
 import top.limingzxc.spire.weapon.AffixRegistry;
 import top.limingzxc.spire.weapon.WeaponAffix;
 import moddedmite.rustedironcore.network.Network;
@@ -13,12 +12,15 @@ import java.util.List;
 /**
  * 锻造 GUI。
  * 展示所有可用词条，玩家选择其一后通过 PacketRoomAction 发送到服务端。
- * 服务端验证材料并应用词条。取消则返回 RestScreen。
  */
 public class ForgeScreen extends GuiScreen {
 
-    private final int cardWidth = 200;
-    private final int cardHeight = 50;
+    private static final int CARD_WIDTH = 180;
+    private static final int CARD_HEIGHT = 20;
+    private static final int CARD_GAP = 36;
+    private static final int COLOR_EFFECT = 0xFFFFAA;
+    private static final int COLOR_MATERIAL = 0xAAAAAA;
+
     private List<WeaponAffix> affixOptions;
 
     @Override
@@ -26,15 +28,17 @@ public class ForgeScreen extends GuiScreen {
         buttonList.clear();
         affixOptions = AffixRegistry.getAllAffixes();
 
-        int startY = height / 2 - 80;
+        int totalHeight = affixOptions.size() * CARD_GAP;
+        int startY = (height - totalHeight) / 2 - 10;
+
         for (int i = 0; i < affixOptions.size(); i++) {
-            WeaponAffix affix = affixOptions.get(i);
-            int y = startY + i * (cardHeight + 10);
-            String label = affix.name + " — 需要: " + affix.materialName + "×" + affix.materialCount;
-            buttonList.add(new GuiButton(100 + i, width / 2 - cardWidth / 2, y, cardWidth, cardHeight, label));
+            int y = startY + i * CARD_GAP;
+            buttonList.add(new GuiButton(100 + i,
+                width / 2 - CARD_WIDTH / 2, y, CARD_WIDTH, CARD_HEIGHT,
+                affixOptions.get(i).name));
         }
 
-        buttonList.add(new GuiButton(10, width / 2 - 50, height - 40, 100, 20, "取消"));
+        buttonList.add(new GuiButton(10, width / 2 - 50, startY + affixOptions.size() * CARD_GAP + 8, 100, 20, "取消"));
     }
 
     @Override
@@ -42,20 +46,21 @@ public class ForgeScreen extends GuiScreen {
         drawDefaultBackground();
         super.drawScreen(mouseX, mouseY, partialTicks);
 
-        drawCenteredString(fontRenderer, "武器锻造", width / 2, 15, 0xFFAA00);
-        drawCenteredString(fontRenderer, "将武器拿在手中，选择词条进行锻造",
+        drawCenteredString(fontRenderer, "§6武器锻造", width / 2, 15, 0xFFAA00);
+        drawCenteredString(fontRenderer, "§7将武器拿在手中，选择词条进行锻造",
             width / 2, 30, 0xAAAAAA);
 
-        for (int i = 0; i < affixOptions.size(); i++) {
+        for (int i = 0; i < affixOptions.size() && i < buttonList.size(); i++) {
+            GuiButton btn = (GuiButton) buttonList.get(i);
             WeaponAffix affix = affixOptions.get(i);
-            if (i < buttonList.size()) {
-                GuiButton btn = (GuiButton) buttonList.get(i);
-                String effectDesc = affix.effect.target + " " +
-                    (affix.effect.mode == RelicEffect.ModifierMode.ADD ? "+" : "×") +
-                    affix.effect.value;
-                drawCenteredString(fontRenderer, effectDesc,
-                    btn.xPosition + cardWidth / 2, btn.yPosition + cardHeight - 15, 0x888888);
-            }
+
+            int infoY = btn.yPosition + CARD_HEIGHT + 4;
+            String desc = affix.effect.getDescription();
+            String cost = "需要: " + affix.materialName + "×" + affix.materialCount;
+
+            // 效果描述在左，材料需求在右
+            drawString(fontRenderer, desc, btn.xPosition + 4, infoY, COLOR_EFFECT);
+            drawString(fontRenderer, cost, btn.xPosition + CARD_WIDTH - fontRenderer.getStringWidth(cost) - 4, infoY, COLOR_MATERIAL);
         }
     }
 

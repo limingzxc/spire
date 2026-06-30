@@ -8,6 +8,8 @@ import top.limingzxc.spire.register.SpireRegistryInit;
 import top.limingzxc.spire.relic.RelicEffect;
 import top.limingzxc.spire.relic.RelicManager;
 import top.limingzxc.spire.weapon.AffixManager;
+import top.limingzxc.spire.weapon.WeaponAffix;
+import java.util.List;
 import moddedmite.rustedironcore.api.event.Handlers;
 import moddedmite.rustedironcore.api.event.events.CraftingRecipeRegisterEvent;
 import moddedmite.rustedironcore.api.event.events.DimensionRegisterEvent;
@@ -26,6 +28,7 @@ import net.minecraft.ItemStack;
 import net.minecraft.NBTTagCompound;
 import net.minecraft.DamageSource;
 import net.minecraft.ServerPlayer;
+import net.minecraft.Slot;
 
 /**
  * 集中注册所有 RIC Handler。
@@ -166,6 +169,47 @@ public class SpireEvents {
             @Override
             public void onClientTick(net.minecraft.Minecraft client) {
                 DungeonManager.getInstance().onClientTick(client);
+            }
+        });
+
+        // === Tooltip: 武器词条显示（CLIENT only） ===
+        Handlers.Tooltip.register(new ITooltipListener() {
+            @Override
+            public void onTooltipHead(ItemStack stack, List<String> tooltip, EntityPlayer player, boolean detailed, Slot slot) { }
+
+            @Override
+            public void onTooltipNeck(ItemStack stack, List<String> tooltip, EntityPlayer player, boolean detailed, Slot slot) { }
+
+            @Override
+            public void onTooltipBody(ItemStack stack, List<String> tooltip, EntityPlayer player, boolean detailed, Slot slot) {
+                List<WeaponAffix> affixes = AffixManager.getAffixes(stack);
+                if (affixes.isEmpty()) return;
+
+                if (detailed) {
+                    for (WeaponAffix affix : affixes) {
+                        tooltip.add("§b" + affix.name + ": §e" + affix.effect.getDescription());
+                    }
+                } else {
+                    StringBuilder sb = new StringBuilder("§b词条: ");
+                    for (int i = 0; i < affixes.size(); i++) {
+                        if (i > 0) sb.append(", ");
+                        sb.append(affixes.get(i).name);
+                    }
+                    tooltip.add(sb.toString());
+                }
+            }
+
+            @Override
+            public void onTooltipWaist(ItemStack stack, List<String> tooltip, EntityPlayer player, boolean detailed, Slot slot) { }
+
+            @Override
+            public void onTooltipTail(ItemStack stack, List<String> tooltip, EntityPlayer player, boolean detailed, Slot slot) {
+                if (!detailed) {
+                    List<WeaponAffix> affixes = AffixManager.getAffixes(stack);
+                    if (!affixes.isEmpty()) {
+                        tooltip.add("§7§o按住 Shift 查看词条详情");
+                    }
+                }
             }
         });
 

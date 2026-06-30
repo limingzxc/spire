@@ -143,6 +143,12 @@ todos:
   - id: phase-fix-nbttagstring-construct
     content: 修复 startNewRun 崩溃（NBTTagString 单参构造把参数当 name、data 为 null → ItemStack.copy 抛 Empty string not allowed）。5 处 new NBTTagString(x) 改为双参 new NBTTagString("", x)，getTagList 加 hasKey 守卫
     status: completed
+  - id: phase-fix-dim-weather-npe
+    content: 修复进入尖塔维度后客户端渲染崩溃（World.isStormingAt events null）。SpireDimensionProvider 覆写 calcSunriseSunsetColors 返回 null，参照 WorldProviderEnd 规避非主世界维度天气计算 NPE
+    status: completed
+  - id: phase-fix-player-manager-residual
+    content:修复 travelToDimension 撞尖塔 PlayerManager 残留（client crash 后未清理）抛 "already is in chunk" 崩溃。抽 cleanPlayerManagerResidual helper，teleportToSpire 与 returnToOverworld 的 travelToDimension 前重置 managedPos 到目标坐标并主动 removePlayer 清理残留
+    status: completed
 isProject: false
 ---
 
@@ -152,9 +158,7 @@ isProject: false
 
 ## 当前状态
 
-**全部完成**：50 个子任务全部完成（24 个 MVP + 9 个第一轮修复 + 8 个流程审计修复 + 7 个游玩流程修复 + 1 个维度传送崩溃修复 + 1 个 NBT 字符串构造崩溃修复），编译通过（`BUILD SUCCESSFUL`），可进入 MITE 实机验证。
-
-**最近一轮**：实机测试发现右键传送门进入维度时服务端崩溃（`Empty string not allowed`），根因是 1.6.4 `NBTTagString` 单参构造把参数当 name、`data` 留 null，`ItemStack.copy()` 时双参构造 null 检查抛异常。已修复 5 处误用。详见下文"NBT 字符串构造崩溃修复"章节。
+**全部完成**：52 个子任务全部完成，编译通过（`BUILD SUCCESSFUL`），可进入 MITE 实机验证。
 
 ---
 
@@ -236,48 +240,7 @@ src/main/java/top/limingzxc/spire/
     └── ItemSpirePortal.java
 ```
 
-
 ---
-
-## 维度传送崩溃修复（第四轮）
-
-**现象**：右键 `spire_portal` 物品立即崩溃，`java.lang.NullPointerException: Cannot read field "posX" because "var18" is null`，堆栈定位 `ServerConfigurationManager.transferEntityToWorld:395` → `travelToDimension` → `DungeonManager.teleportToSpire:126`。
-
-**根因**：1.6.4 `transferEntityToWorld` 对目标维度按 `par1Entity.dimension` 分支：
-- `-1`（下界）/ `0`（主世界）/ `-2`（地下世界）走专用分支，直接用实体当前坐标。
-- **其他维度（含自定义 id=3 尖塔）走 `else` 分支**：`ChunkCoordinates var18 = par2 == 1 ? getSpawnPoint() : getEntrancePortalLocation();`，然后 `var5 = var18.posX;`。
-
-`WorldProvider.getEntrancePortalLocation()` 默认返回 `null`，尖塔维度未覆写 → NPE。即便修了 NPE，`transferEntityToWorld` 后续 `placeInPortal` 会在虚空里 `makePortal` 建一个下界传送门框架（obsidian + portal 方块），玩家被放进去后可能触发再次传送。
-
-**修复**：
-1. `SpireDimensionProvider` 覆写 `getEntrancePortalLocation()` 返回固定出生点 `ChunkCoordinates(0, 65, 0)`（与 `DungeonManager.SPAWN_*` 对齐），消除 NPE。
-2. `DungeonManager` 新增 `clearPortalRubble(World, cx, cy, cz, r)`：仅清除 `Block.portal` 与 `Block.obsidian` 方块，不动地形。
-3. `teleportToSpire` 与 `returnToOverworld` 在 `travelToDimension` 之后、`travelInsideDimension` 之前各调一次 `clearPortalRubble`，清除目标世界自动生成的下界传送门框架。同 tick 内玩家即被 `travelInsideDimension` 移走，不会触发 portal tick 再次传送。
-
-返回主世界方向不崩溃（目标 dim=0 走 `par1Entity.dimension == 0` 分支，不调 `getEntrancePortalLocation`），但同样会生成框架，因此一并清理。
-
----
-
-## NBT 字符串构造崩溃修复（第五轮）
-
-**现象**：右键 `spire_portal` 进入维度时服务端立即崩溃，`java.lang.IllegalArgumentException: Empty string not allowed`，堆栈 `NBTTagString.<init>` → `NBTTagString.copy` → `NBTTagList.copy` → `NBTTagCompound.copy` → `ItemStack.copy` → `InventoryPlayer.addItemStackToInventory` → `DungeonManager.grantStarterGear:162` → `startNewRun:99`。
-
-**根因**：1.6.4 `NBTTagString` 有两个构造函数：
-- `NBTTagString(String par1Str)`：单参，`par1Str` 传给 `super(8, par1Str)` 当作 **name**，`data` 字段保持 **null**。
-- `NBTTagString(String par1Str, String par2Str)`：双参，`par2Str` 赋给 `this.data`，并检查 `par2Str == null` 抛 `Empty string not allowed`。
-
-`NBTTagString.copy()` 实现为 `new NBTTagString(this.getName(), this.data)`。代码中 5 处误用单参构造 `new NBTTagString(value)`，导致创建出的 tag `data=null`；当 `ItemStack.copy()` 复制带此 tag 的武器时，双参构造触发 null 检查崩溃。`grantStarterGear` 给铁剑应用 `sharp_edge` 词条后 `addItemStackToInventory` 内部触发 copy，于是崩溃。
-
-**修复**：将 5 处单参构造改为双参 `new NBTTagString("", value)`（list 元素 name 用空串，data 是真实值）：
-- `AffixManager.applyAffix` 2 处（重建已有 affix + 追加新 affix）
-- `DungeonManager.writeToNBT` 3 处（relicList / shopList / rewardList）
-
-同时 `AffixManager.getAffixes` 与 `applyAffix` 的 `getTagList(NBT_AFFIX_LIST)` 调用前加 `hasKey` 守卫，避免 1.6.4 对不存在 key 返回含空 data 占位 tag 的 list。顺带修复了 NBT 持久化失效的隐患（之前 relic/shop/reward id 写入后 data 为 null，重启读不回来）。
-
-附带说明：同一时间点的客户端渲染崩溃（`World.isStormingAt` → `events` null）是此崩溃的连锁反应——服务端在 `grantStarterGear` 崩溃，但 `travelToDimension` 已中途开始，客户端 `WorldClient` 处于半初始化状态。修此崩溃后应不再复现。
-
----
-
 
 ## 技术参考
 

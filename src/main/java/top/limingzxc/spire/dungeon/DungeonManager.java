@@ -21,6 +21,7 @@ import net.minecraft.NBTTagCompound;
 import net.minecraft.NBTTagList;
 import net.minecraft.NBTTagString;
 import net.minecraft.World;
+import net.minecraft.WorldServer;
 
 import java.util.*;
 
@@ -123,6 +124,7 @@ public class DungeonManager {
             player.posX, player.posY, player.posZ));
 
         int spireDimId = SpireDimensionProvider.SPIRE_DIMENSION.id();
+        cleanPlayerManagerResidual(serverPlayer, spireDimId, SPAWN_X, SPAWN_Z);
         serverPlayer.travelToDimension(spireDimId);
         clearPortalRubble(player.worldObj,
             (int) player.posX, (int) player.posY, (int) player.posZ, 6);
@@ -152,9 +154,30 @@ public class DungeonManager {
         }
     }
 
-    /** 发放开局装备：铁剑（带锋利词条）+ 铁套四件。 */
+    /** 清理目标维度 PlayerManager 中可能残留的玩家注册（防御 client crash 后状态不一致）。
+     *  transferPlayerToDimension 的 func_72375_a 只从源维度 removePlayer，不清目标维度残留，
+     *  导致 addPlayer 撞上 "already in chunk" 崩溃。这里主动在目标维度 removePlayer，
+     *  重置 managedPos 到目标坐标使扫描范围覆盖残留；removePlayer 对不含玩家的 chunk 是 no-op。 */
+    private void cleanPlayerManagerResidual(ServerPlayer player, int targetDimId, double targetX, double targetZ) {
+        WorldServer targetWorld = player.mcServer.worldServerForDimension(targetDimId);
+        if (targetWorld == null) return;
+        double savedMx = player.managedPosX;
+        double savedMz = player.managedPosZ;
+        player.managedPosX = targetX;
+        player.managedPosZ = targetZ;
+        try {
+            targetWorld.getPlayerManager().removePlayer(player);
+        } catch (Exception e) {
+            SpireMod.LOGGER.warn("Pre-cleanup of dim {} PlayerManager residual failed: {}",
+                targetDimId, e.getMessage());
+        }
+        player.managedPosX = savedMx;
+        player.managedPosZ = savedMz;
+    }
+
+    /** 发放开局装备：银剑（带锋利词条）+ 铁套四件。 */
     private void grantStarterGear(EntityPlayer player) {
-        ItemStack sword = new ItemStack(Item.swordIron, 1);
+        ItemStack sword = new ItemStack(Item.swordSilver, 1);
         WeaponAffix sharpEdge = AffixRegistry.getById("sharp_edge");
         if (sharpEdge != null) {
             AffixManager.applyAffix(sword, sharpEdge);
@@ -169,7 +192,7 @@ public class DungeonManager {
         player.inventory.armorInventory[1] = new ItemStack(Item.legsIron, 1);
         player.inventory.armorInventory[0] = new ItemStack(Item.bootsIron, 1);
 
-        SpireMod.LOGGER.info("Granted starter gear (iron sword + iron armor) to {}", player.getEntityName());
+        SpireMod.LOGGER.info("Granted starter gear (silver sword + iron armor) to {}", player.getEntityName());
     }
 
     /** 发放 1 个起始遗物（从 StarterRelics 三选一） */
@@ -201,6 +224,7 @@ public class DungeonManager {
         if (loc == null) {
             SpireMod.LOGGER.warn("No return location for {}; defaulting to overworld.", player.getEntityName());
             if (player.dimension != 0) {
+                cleanPlayerManagerResidual(serverPlayer, 0, player.posX, player.posZ);
                 serverPlayer.travelToDimension(0);
                 clearPortalRubble(player.worldObj,
                     (int) player.posX, (int) player.posY, (int) player.posZ, 6);
@@ -208,6 +232,7 @@ public class DungeonManager {
             return;
         }
         if (player.dimension != loc.dimensionId) {
+            cleanPlayerManagerResidual(serverPlayer, loc.dimensionId, loc.x, loc.z);
             serverPlayer.travelToDimension(loc.dimensionId);
             clearPortalRubble(player.worldObj,
                 (int) player.posX, (int) player.posY, (int) player.posZ, 6);
